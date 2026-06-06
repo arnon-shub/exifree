@@ -19,7 +19,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;display:fl
 .hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(255,59,59,0.06) 0%,transparent 70%);pointer-events:none}
 .hero-warning{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;background:var(--red-glow);border:1px solid rgba(255,59,59,0.15);border-radius:100px;font-size:13px;color:var(--red);font-weight:500;margin-bottom:32px;animation:fadeDown .6s ease}
 @keyframes fadeDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
-.hero h1{font-size:clamp(36px,6vw,64px);font-weight:800;line-height:1.15;margin-bottom:24px;max-width:700px;animation:fadeUp .6s ease .1s both}
+.hero h1{font-size:clamp(36px,6vw,64px);font-weight:700;line-height:1.15;margin-bottom:24px;max-width:700px;animation:fadeUp .6s ease .1s both}
 .hero h1 em{font-style:normal;color:var(--red);position:relative}.hero h1 em::after{content:'';position:absolute;bottom:2px;left:0;right:0;height:3px;background:var(--red);border-radius:2px;opacity:.4}
 .hero-sub{font-size:clamp(16px,2.2vw,20px);color:var(--text-dim);max-width:540px;font-weight:300;margin-bottom:48px;animation:fadeUp .6s ease .2s both}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
@@ -65,7 +65,7 @@ footer a{color:var(--text-dim);text-decoration:underline;text-underline-offset:2
 <a href="#problem" class="skip-link">Skip to content</a>
 <nav aria-label="Main navigation">
   <a href="/" class="nav-logo">exi<span>free</span></a>
-  <a href="/app" class="nav-cta">Strip a photo now →</a>
+  <a href="/app/" class="nav-cta">Strip a photo now →</a>
 </nav>
 <main>
 <section class="hero">
@@ -73,7 +73,7 @@ footer a{color:var(--text-dim);text-decoration:underline;text-underline-offset:2
   <h1>Your photos reveal<br>more than <em>you think</em></h1>
   <p class="hero-sub">GPS, device model, date, time — every phone photo contains metadata that exposes sensitive information. exifree strips it all, in the browser, without uploading anything.</p>
   <div class="hero-actions">
-    <a href="/app" class="btn-large btn-primary">Strip a photo now →</a>
+    <a href="/app/" class="btn-large btn-primary">Strip a photo now →</a>
     <a href="#how" class="btn-large btn-ghost">How it works</a>
   </div>
   <div class="hero-trust">
@@ -137,11 +137,11 @@ footer a{color:var(--text-dim);text-decoration:underline;text-underline-offset:2
 <section class="cta-section">
   <h2>Ready?</h2>
   <p>Free. Instant. No upload.</p>
-  <a href="/app" class="btn-large btn-primary">Strip your first photo →</a>
+  <a href="/app/" class="btn-large btn-primary">Strip your first photo →</a>
   <p style="margin-top:24px;font-size:14px;color:var(--text-dim);">Found it useful? Share with anyone who cares about privacy.</p>
 </section>
 <footer role="contentinfo">
-  <p>exifree — free tool to strip metadata from photos<br>Zero upload. Zero server. Zero storage.<br>by <a href="https://particular.co.il" style="color:var(--text);">Particular</a> · <a href="https://github.com/atas2390/exifree">Source</a> · <a href="/privacy">Privacy</a> · <a href="/accessibility">Accessibility</a></p>
+  <p>exifree — free tool to strip metadata from photos<br>Zero upload. Zero server. Zero storage.<br>by <a href="https://particular.co.il" style="color:var(--text);">Particular</a> · <a href="https://github.com/arnon-shub/exifree">Source</a> · <a href="/privacy">Privacy</a> · <a href="/accessibility">Accessibility</a></p>
 </footer>
 </body>
 </html>

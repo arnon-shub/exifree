@@ -144,6 +144,11 @@ body::before {
   border-color: var(--accent);
 }
 
+.dropzone.dragover {
+  transform: scale(1.01);
+  border-style: solid;
+}
+
 .dropzone:hover::before, .dropzone.dragover::before {
   opacity: 1;
 }
@@ -357,6 +362,7 @@ body::before {
 .btn {
   flex: 1;
   padding: 14px 24px;
+  min-height: 48px;
   border: none;
   border-radius: var(--radius);
   font-family: var(--font);
@@ -370,6 +376,12 @@ body::before {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+/* Copy is a compact secondary action — don't let it grow as wide as Download */
+#copyBtn {
+  flex: 0 0 auto;
+  padding: 14px 20px;
 }
 
 .btn-primary {
@@ -492,6 +504,57 @@ body::before {
 
 .batch-info strong { color: var(--text); }
 
+/* Per-file batch results */
+.batch-results {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.batch-results-header {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.batch-results-list {
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.batch-results-list::-webkit-scrollbar { width: 6px; }
+.batch-results-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.batch-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.batch-file:last-child { border-bottom: none; }
+.batch-file-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.batch-file-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  text-align: right;
+}
+.batch-file-meta .saved { color: var(--green); font-weight: 600; }
+.batch-file-meta .clean { color: var(--text-dim); }
+
 .size-comparison {
   display: flex;
   align-items: center;
@@ -526,6 +589,7 @@ body::before {
   .container { padding: 24px 16px; }
   .how-it-works { grid-template-columns: 1fr; }
   .actions { flex-direction: column; }
+  #copyBtn { flex: 1 1 auto; }
   .metadata-key { min-width: 90px; }
 }
 
@@ -605,7 +669,7 @@ body::before {
   <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop a photo here or click to choose a file">
     <div class="dropzone-icon" aria-hidden="true">📷</div>
     <div class="dropzone-text">Drop a photo here</div>
-    <div class="dropzone-sub">or click to choose a file · JPG, PNG, WebP, HEIC</div>
+    <div class="dropzone-sub">or click to choose · paste with ⌘/Ctrl+V · JPG, PNG, WebP, HEIC</div>
     <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple aria-label="Choose a photo to strip metadata">
   </div>
 
@@ -659,9 +723,16 @@ body::before {
       <button class="btn btn-primary" id="downloadBtn" disabled aria-label="Download clean photo">
         📥 Download clean photo
       </button>
+      <button class="btn btn-secondary" id="copyBtn" disabled aria-label="Copy clean photo to clipboard">
+        📋 Copy
+      </button>
       <button class="btn btn-secondary" onclick="reset()" aria-label="Choose new photo">
         ✕ New photo
       </button>
+    </div>
+    <div class="batch-results" id="batchResults" style="display:none" aria-label="Per-file results">
+      <div class="batch-results-header">All files</div>
+      <ul class="batch-results-list" id="batchResultsList" role="list"></ul>
     </div>
     <div class="batch-actions" id="batchActions" style="display:none">
       <button class="btn btn-secondary" id="downloadAllBtn" aria-label="Download all as ZIP">
@@ -675,7 +746,7 @@ body::before {
     <p>
       exifree — free tool to strip metadata from photos<br>
       Runs in the browser. Zero upload. Zero server. Zero storage.<br>
-      by <a href="https://particular.co.il" style="color:var(--text);">Particular</a> · <a href="https://github.com/atas2390/exifree">Source</a> · <a href="/privacy">Privacy</a> · <a href="/accessibility">Accessibility</a>
+      by <a href="https://particular.co.il" style="color:var(--text);">Particular</a> · <a href="https://github.com/arnon-shub/exifree">Source</a> · <a href="/privacy">Privacy</a> · <a href="/accessibility">Accessibility</a>
     </p>
   </footer>
 </div>
@@ -834,13 +905,7 @@ function categorizeMeta(metadata, key, value) {
   }
 }
 
-// Safe text escaping — prevents XSS from metadata values
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
-}
-
+// ── EXIF data parser ──────────────────────────────────────────────────────────
 function parseExifData(view, tiffStart, metadata) {
   try {
     const bigEndian = view.getUint16(tiffStart) === 0x4D4D;
@@ -896,7 +961,7 @@ function parseExifData(view, tiffStart, metadata) {
           } else if (type === 4) { // LONG
             value = g32(valueOff).toString();
           } else if (type === 5 || type === 10) { // RATIONAL
-            const ratOff = numValues > 1 || true ? tiffStart + g32(valueOff) : valueOff;
+            const ratOff = tiffStart + g32(valueOff);
             if (ratOff + 8 <= view.byteLength) {
               if (isGPS && (tag === 2 || tag === 4)) { // Lat/Lon
                 const d = g32(ratOff) / g32(ratOff+4);
@@ -960,10 +1025,12 @@ function countMetadataMarkers(buffer) {
 }
 
 // ── Binary JPEG stripper (lossless) ──────────────────────────────────────────
+// Returns { buffer, removed: [labels] } — `removed` lists what was actually stripped.
 function stripJpeg(buffer) {
   const src = new Uint8Array(buffer);
-  if (src[0] !== 0xFF || src[1] !== 0xD8) return buffer;
+  if (src[0] !== 0xFF || src[1] !== 0xD8) return { buffer, removed: [] };
 
+  const removed = [];
   const parts = [src.slice(0, 2)]; // SOI marker
   let i = 2;
 
@@ -990,7 +1057,11 @@ function stripJpeg(buffer) {
 
     // Remove: APP1–APP15 and COM
     const isMetadata = (marker >= 0xFFE1 && marker <= 0xFFEF) || marker === 0xFFFE;
-    if (!isMetadata) parts.push(src.slice(i, i + segTotal));
+    if (isMetadata) {
+      removed.push(jpegMarkerLabel(marker));
+    } else {
+      parts.push(src.slice(i, i + segTotal));
+    }
 
     i += segTotal;
   }
@@ -999,22 +1070,41 @@ function stripJpeg(buffer) {
   const out = new Uint8Array(totalLen);
   let pos = 0;
   for (const p of parts) { out.set(p, pos); pos += p.length; }
-  return out.buffer;
+  return { buffer: out.buffer, removed };
+}
+
+function jpegMarkerLabel(marker) {
+  if (marker === 0xFFE1) return 'EXIF / XMP';
+  if (marker === 0xFFE2) return 'ICC color profile';
+  if (marker === 0xFFED) return 'IPTC';
+  if (marker === 0xFFEE) return 'Adobe';
+  if (marker === 0xFFFE) return 'Comment';
+  return 'APP' + ((marker & 0x00FF) - 0xE0) + ' segment';
 }
 
 // ── Binary PNG stripper (lossless) ───────────────────────────────────────────
+const PNG_CHUNK_LABELS = {
+  tEXt: 'Text', iTXt: 'Unicode text', zTXt: 'Compressed text',
+  eXIf: 'EXIF', tIME: 'Timestamp', iCCP: 'ICC color profile',
+  pHYs: 'Pixel density', cHRM: 'Chromaticity', gAMA: 'Gamma', sRGB: 'sRGB intent',
+};
 function stripPng(buffer) {
   const src  = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const dec  = new TextDecoder('latin1');
-  const REMOVE = new Set(['tEXt','iTXt','zTXt','eXIf','tIME','iCCP','pHYs','cHRM','gAMA','sRGB']);
+  const REMOVE = new Set(Object.keys(PNG_CHUNK_LABELS));
+  const removed = [];
   const parts = [src.slice(0, 8)];
   let offset = 8;
   while (offset + 12 <= buffer.byteLength) {
     const length = view.getUint32(offset);
     const type   = dec.decode(src.slice(offset + 4, offset + 8));
     const total  = 12 + length;
-    if (!REMOVE.has(type)) parts.push(src.slice(offset, offset + total));
+    if (REMOVE.has(type)) {
+      removed.push(PNG_CHUNK_LABELS[type] || type);
+    } else {
+      parts.push(src.slice(offset, offset + total));
+    }
     if (type === 'IEND') break;
     offset += total;
   }
@@ -1022,7 +1112,7 @@ function stripPng(buffer) {
   const out = new Uint8Array(totalLen);
   let pos = 0;
   for (const p of parts) { out.set(p, pos); pos += p.length; }
-  return out.buffer;
+  return { buffer: out.buffer, removed };
 }
 
 // ── Binary WebP stripper (lossless) ──────────────────────────────────────────
@@ -1031,22 +1121,29 @@ function stripWebp(buffer) {
   const view = new DataView(buffer);
   const dec  = new TextDecoder('latin1');
   const enc  = new TextEncoder();
-  const REMOVE = new Set(['EXIF', 'XMP ', 'ICCP']);
+  const REMOVE = { 'EXIF': 'EXIF', 'XMP ': 'XMP', 'ICCP': 'ICC color profile' };
+  const removed = [];
   const parts  = [];
   let offset   = 12;
+  let clearedFlags = false;
   while (offset + 8 <= buffer.byteLength) {
     const id    = dec.decode(src.slice(offset, offset + 4));
     const size  = view.getUint32(offset + 4, true);
     const total = 8 + size + (size % 2);
     if (id === 'VP8X') {
       const chunk = new Uint8Array(src.slice(offset, offset + total));
+      const before = chunk[8];
       chunk[8] &= ~((1 << 1) | (1 << 3) | (1 << 4));
+      if (chunk[8] !== before) clearedFlags = true;
       parts.push(chunk);
-    } else if (!REMOVE.has(id)) {
+    } else if (REMOVE[id]) {
+      removed.push(REMOVE[id]);
+    } else {
       parts.push(src.slice(offset, offset + total));
     }
     offset += total;
   }
+  if (clearedFlags && removed.length === 0) removed.push('Metadata flags');
   const dataLen = parts.reduce((s, p) => s + p.length, 0);
   const out = new Uint8Array(12 + dataLen);
   const outView = new DataView(out.buffer);
@@ -1055,24 +1152,26 @@ function stripWebp(buffer) {
   out.set(enc.encode('WEBP'), 8);
   let pos = 12;
   for (const p of parts) { out.set(p, pos); pos += p.length; }
-  return out.buffer;
+  return { buffer: out.buffer, removed };
 }
 
-// ── Dispatcher — Returns { blob, outputMime, outputExt } ─────────────────────
+// ── Dispatcher — Returns { blob, outputMime, outputExt, removed } ────────────
 function stripMetadata(file) {
   return file.arrayBuffer().then(buffer => {
     const format = detectFormat(buffer);
-    let stripped, outputMime, outputExt;
+    let result, outputMime, outputExt;
     if (format === 'jpeg') {
-      stripped = stripJpeg(buffer); outputMime = 'image/jpeg'; outputExt = 'jpg';
+      result = stripJpeg(buffer); outputMime = 'image/jpeg'; outputExt = 'jpg';
     } else if (format === 'png') {
-      stripped = stripPng(buffer);  outputMime = 'image/png';  outputExt = 'png';
+      result = stripPng(buffer);  outputMime = 'image/png';  outputExt = 'png';
     } else if (format === 'webp') {
-      stripped = stripWebp(buffer); outputMime = 'image/webp'; outputExt = 'webp';
+      result = stripWebp(buffer); outputMime = 'image/webp'; outputExt = 'webp';
     } else {
       throw new Error('Unsupported format');
     }
-    return { blob: new Blob([stripped], { type: outputMime }), outputMime, outputExt };
+    // Dedupe labels while preserving order
+    const removed = [...new Set(result.removed)];
+    return { blob: new Blob([result.buffer], { type: outputMime }), outputMime, outputExt, removed };
   });
 }
 
@@ -1086,6 +1185,7 @@ const fileSize = document.getElementById('fileSize');
 const metadataList = document.getElementById('metadataList');
 const metaCount = document.getElementById('metaCount');
 const downloadBtn = document.getElementById('downloadBtn');
+const copyBtn = document.getElementById('copyBtn');
 const statusBar = document.getElementById('statusBar');
 const statusText = document.getElementById('statusText');
 const metadataAfter = document.getElementById('metadataAfter');
@@ -1113,6 +1213,20 @@ function loadHeicLibrary() {
     script.src = '/vendor/heic-to.js';
     script.onload = () => { heicLoaded = true; resolve(); };
     script.onerror = () => reject(new Error('Failed to load HEIC library'));
+    document.head.appendChild(script);
+  });
+}
+
+// Lazy-load JSZip library (only needed for batch ZIP download)
+let zipLoaded = false;
+function loadZipLibrary() {
+  return new Promise((resolve, reject) => {
+    if (zipLoaded && window.JSZip) { resolve(); return; }
+    if (window.JSZip) { zipLoaded = true; resolve(); return; }
+    const script = document.createElement('script');
+    script.src = '/vendor/jszip.min.js';
+    script.onload = () => { zipLoaded = true; resolve(); };
+    script.onerror = () => reject(new Error('Failed to load ZIP library'));
     document.head.appendChild(script);
   });
 }
@@ -1147,6 +1261,137 @@ function formatSize(bytes) {
   return (bytes/(1024*1024)).toFixed(1) + ' MB';
 }
 
+// Track the current preview object URL so we can revoke it (prevents memory leaks)
+let currentPreviewUrl = null;
+function setPreview(file) {
+  if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+  currentPreviewUrl = URL.createObjectURL(file);
+  previewImg.src = currentPreviewUrl;
+  previewImg.alt = 'Preview of ' + file.name;
+  fileName.textContent = file.name;
+  fileSize.textContent = formatSize(file.size);
+}
+
+// Core: read metadata, render the list, strip the file. Returns the processed
+// entry ({ name, blob, originalSize, cleanSize }) or null on failure.
+// Shared by both single-file and batch flows.
+async function stripAndRender(file) {
+  const originalBytes = file.size;
+
+  // Read EXIF
+  const buffer = await file.arrayBuffer();
+  const metadata = readExif(buffer);
+  const markers = countMetadataMarkers(buffer);
+
+  // Build metadata list
+  metadataList.innerHTML = '';
+  let totalFields = 0;
+
+  const categories = [
+    { name: '📍 Location (GPS)', items: metadata.gps, danger: true },
+    { name: '📱 Device', items: metadata.camera, danger: false },
+    { name: '📅 Date & Time', items: metadata.datetime, danger: false },
+    { name: '📋 Other', items: metadata.other, danger: false },
+  ];
+
+  categories.forEach(cat => {
+    if (cat.items.length === 0) return;
+
+    const catEl = document.createElement('li');
+    catEl.className = 'meta-category';
+    catEl.textContent = cat.name;
+    metadataList.appendChild(catEl);
+
+    cat.items.forEach(item => {
+      const li = document.createElement('li');
+      li.className = 'metadata-item';
+      const keySpan = document.createElement('span');
+      keySpan.className = 'metadata-key';
+      keySpan.textContent = item.key;
+      const valSpan = document.createElement('span');
+      valSpan.className = 'metadata-value' + (cat.danger ? ' danger' : '');
+      valSpan.textContent = item.value;
+      li.appendChild(keySpan);
+      li.appendChild(valSpan);
+      metadataList.appendChild(li);
+      totalFields++;
+    });
+  });
+
+  if (markers.types.length > 0) {
+    const catEl = document.createElement('li');
+    catEl.className = 'meta-category';
+    catEl.textContent = '🗂️ Blocks found';
+    metadataList.appendChild(catEl);
+
+    markers.types.forEach(t => {
+      const li = document.createElement('li');
+      li.className = 'metadata-item';
+      const keySpan = document.createElement('span');
+      keySpan.className = 'metadata-key';
+      keySpan.textContent = 'Block';
+      const valSpan = document.createElement('span');
+      valSpan.className = 'metadata-value';
+      valSpan.textContent = t;
+      li.appendChild(keySpan);
+      li.appendChild(valSpan);
+      metadataList.appendChild(li);
+    });
+  }
+
+  // Strip metadata first — `removed` is the source of truth for what changed
+  const stripResult = await stripMetadata(file);
+  const removed = stripResult.removed || [];
+
+  // Append a "Removed" category listing exactly what was stripped from the binary
+  // (this includes technical blocks like gamma/sRGB that the reader doesn't surface as fields)
+  if (removed.length > 0) {
+    const catEl = document.createElement('li');
+    catEl.className = 'meta-category';
+    catEl.textContent = '🧹 Removed from file';
+    metadataList.appendChild(catEl);
+
+    removed.forEach(label => {
+      const li = document.createElement('li');
+      li.className = 'metadata-item';
+      const keySpan = document.createElement('span');
+      keySpan.className = 'metadata-key';
+      keySpan.textContent = 'Stripped';
+      const valSpan = document.createElement('span');
+      valSpan.className = 'metadata-value';
+      valSpan.textContent = label;
+      li.appendChild(keySpan);
+      li.appendChild(valSpan);
+      metadataList.appendChild(li);
+    });
+  }
+
+  // Consistent count + header: base it on whether anything was actually removed,
+  // not only on the human-readable fields the reader recognises.
+  const anythingRemoved = totalFields > 0 || markers.count > 0 || removed.length > 0;
+  if (!anythingRemoved) {
+    metadataList.innerHTML = '<li class="metadata-empty">No metadata found — this image was already clean</li>';
+    metaCount.textContent = 'clean';
+    metaCount.className = 'metadata-count clean';
+  } else if (totalFields > 0) {
+    metaCount.textContent = `${totalFields} fields`;
+    metaCount.className = 'metadata-count';
+  } else {
+    // Removed only technical blocks (no readable fields)
+    metaCount.textContent = `${removed.length} blocks`;
+    metaCount.className = 'metadata-count';
+  }
+
+  return {
+    name: file.name.replace(/\.[^.]+$/, '') + '_clean.' + stripResult.outputExt,
+    blob: stripResult.blob,
+    outputExt: stripResult.outputExt,
+    originalSize: originalBytes,
+    cleanSize: stripResult.blob.size,
+    removed,
+  };
+}
+
 async function processFile(file) {
   // Convert HEIC to JPEG if needed
   if (isHeic(file)) {
@@ -1163,90 +1408,15 @@ async function processFile(file) {
   }
 
   currentFileName = file.name;
-  
   originalSize = file.size;
-  
+
   // Show preview
-  const previewUrl = URL.createObjectURL(file);
-  previewImg.src = previewUrl;
-  previewImg.alt = 'Preview of ' + file.name;
-  fileName.textContent = file.name;
-  fileSize.textContent = formatSize(file.size);
-  
-  // Read EXIF
-  const buffer = await file.arrayBuffer();
-  const metadata = readExif(buffer);
-  const markers = countMetadataMarkers(buffer);
-  
-  // Build metadata list
-  metadataList.innerHTML = '';
-  let totalFields = 0;
-  
-  const categories = [
-    { name: '📍 Location (GPS)', items: metadata.gps, danger: true },
-    { name: '📱 Device', items: metadata.camera, danger: false },
-    { name: '📅 Date & Time', items: metadata.datetime, danger: false },
-    { name: '📋 Other', items: metadata.other, danger: false },
-  ];
-  
-  categories.forEach(cat => {
-    if (cat.items.length === 0) return;
-    
-    const catEl = document.createElement('li');
-    catEl.className = 'meta-category';
-    catEl.textContent = cat.name;
-    metadataList.appendChild(catEl);
-    
-    cat.items.forEach(item => {
-      const li = document.createElement('li');
-      li.className = 'metadata-item';
-      const keySpan = document.createElement('span');
-      keySpan.className = 'metadata-key';
-      keySpan.textContent = item.key;
-      const valSpan = document.createElement('span');
-      valSpan.className = 'metadata-value' + (cat.danger ? ' danger' : '');
-      valSpan.textContent = item.value;
-      li.appendChild(keySpan);
-      li.appendChild(valSpan);
-      metadataList.appendChild(li);
-      totalFields++;
-    });
-  });
-  
-  if (markers.types.length > 0) {
-    const catEl = document.createElement('li');
-    catEl.className = 'meta-category';
-    catEl.textContent = '🗂️ Blocks found';
-    metadataList.appendChild(catEl);
-    
-    markers.types.forEach(t => {
-      const li = document.createElement('li');
-      li.className = 'metadata-item';
-      const keySpan = document.createElement('span');
-      keySpan.className = 'metadata-key';
-      keySpan.textContent = 'Block';
-      const valSpan = document.createElement('span');
-      valSpan.className = 'metadata-value';
-      valSpan.textContent = t;
-      li.appendChild(keySpan);
-      li.appendChild(valSpan);
-      metadataList.appendChild(li);
-    });
-  }
-  
-  if (totalFields === 0 && markers.count === 0) {
-    metadataList.innerHTML = '<li class="metadata-empty">No metadata found in this image</li>';
-    metaCount.textContent = '0 fields';
-    metaCount.className = 'metadata-count clean';
-  } else {
-    metaCount.textContent = `${totalFields} fields`;
-    metaCount.className = 'metadata-count';
-  }
-  
-  // Strip metadata
-  let stripResult;
+  setPreview(file);
+
+  // Strip metadata + render the metadata panel (shared core)
+  let entry;
   try {
-    stripResult = await stripMetadata(file);
+    entry = await stripAndRender(file);
   } catch(e) {
     statusText.textContent = 'Could not process this image format — try converting to JPEG first';
     statusBar.style.color = 'var(--accent)';
@@ -1255,46 +1425,183 @@ async function processFile(file) {
     dropzone.classList.remove('processing');
     return;
   }
-  cleanBlob    = stripResult.blob;
-  cleanFileExt = stripResult.outputExt;
+
+  cleanBlob    = entry.blob;
+  cleanFileExt = entry.outputExt;
+  const wasClean = entry.removed.length === 0;
 
   // Show size comparison
   const sizeComp = document.getElementById('sizeComparison');
   document.getElementById('sizeBefore').textContent = formatSize(originalSize);
   document.getElementById('sizeAfter').textContent  = formatSize(cleanBlob.size);
   const saved = originalSize - cleanBlob.size;
-  if (saved > 0) {
+  if (saved > 0 && !wasClean) {
     const pct = Math.round(saved / originalSize * 100);
     document.getElementById('sizeSaving').textContent = `-${formatSize(saved)} (${pct}%)`;
   } else {
     document.getElementById('sizeSaving').textContent = '';
   }
-  sizeComp.style.display = 'flex';
+  // Only show the size row when something was actually removed
+  sizeComp.style.display = wasClean ? 'none' : 'flex';
 
-  processedFiles.push({
-    name: file.name.replace(/\.[^.]+$/, '') + '_clean.' + stripResult.outputExt,
-    blob: cleanBlob,
-    originalSize: originalSize,
-    cleanSize: cleanBlob.size
-  });
-  
+  processedFiles.push(entry);
+
   // Show results
   results.classList.add('visible');
   statusBar.classList.add('visible');
-  metadataAfter.style.display = 'block';
+  statusText.textContent = wasClean
+    ? 'This image was already clean — no metadata to remove'
+    : 'All metadata removed successfully';
+  document.getElementById('statusIcon').textContent = wasClean ? '✓' : '✓';
+  // The "After stripping" panel only makes sense when we stripped something
+  metadataAfter.style.display = wasClean ? 'none' : 'block';
   downloadBtn.disabled = false;
+  copyBtn.disabled = false;
+  dropzone.classList.remove('processing');
   dropzone.classList.add('done');
-  
-  // Batch info
-  if (processedFiles.length > 1) {
+
+  updateBatchUI();
+}
+
+// Update the batch counter + ZIP button based on processedFiles
+function updateBatchUI() {
+  const n = processedFiles.length;
+  const batchInfo = document.getElementById('batchInfo');
+  const batchResults = document.getElementById('batchResults');
+  document.getElementById('batchCount').textContent = n;
+
+  if (n > 1) {
+    batchInfo.classList.add('visible');
     document.getElementById('batchActions').style.display = 'block';
     const totalOriginal = processedFiles.reduce((s, f) => s + f.originalSize, 0);
     const totalClean    = processedFiles.reduce((s, f) => s + f.cleanSize, 0);
     const totalSaved    = totalOriginal - totalClean;
     const savedText     = totalSaved > 0 ? ` · saved ${formatSize(totalSaved)}` : '';
     document.getElementById('downloadAllBtn').innerHTML =
-      `📦 Download all as ZIP (${processedFiles.length} photos${savedText})`;
+      `📦 Download all as ZIP (${n} photos${savedText})`;
+
+    // Per-file before/after list
+    const list = document.getElementById('batchResultsList');
+    list.innerHTML = '';
+    processedFiles.forEach(f => {
+      const li = document.createElement('li');
+      li.className = 'batch-file';
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'batch-file-name';
+      nameEl.textContent = f.name;
+      nameEl.title = f.name;
+
+      const metaEl = document.createElement('span');
+      metaEl.className = 'batch-file-meta';
+      const saved = f.originalSize - f.cleanSize;
+      if (f.removed && f.removed.length > 0 && saved > 0) {
+        const pct = Math.round(saved / f.originalSize * 100);
+        metaEl.innerHTML =
+          `${formatSize(f.originalSize)} → ${formatSize(f.cleanSize)} ` +
+          `<span class="saved">-${formatSize(saved)} (${pct}%)</span>`;
+      } else {
+        metaEl.innerHTML = `${formatSize(f.cleanSize)} <span class="clean">already clean</span>`;
+      }
+
+      li.appendChild(nameEl);
+      li.appendChild(metaEl);
+      list.appendChild(li);
+    });
+    batchResults.style.display = 'block';
+  } else {
+    batchInfo.classList.remove('visible');
+    document.getElementById('batchActions').style.display = 'none';
+    batchResults.style.display = 'none';
   }
+}
+
+// Process multiple files in sequence (batch mode)
+async function processBatch(files) {
+  dropzone.classList.add('processing');
+  dropzone.classList.remove('done');
+
+  // Fresh batch
+  processedFiles = [];
+
+  let processed = 0;
+  let failed = 0;
+  let lastEntry = null;
+  let lastFile = null;
+
+  for (let idx = 0; idx < files.length; idx++) {
+    let file = files[idx];
+
+    // Progress status
+    statusBar.classList.add('visible');
+    statusBar.style.background = '';
+    statusBar.style.borderColor = '';
+    statusBar.style.color = '';
+    document.getElementById('statusIcon').textContent = '⏳';
+    statusText.textContent = `Stripping ${idx + 1} of ${files.length}…`;
+
+    // Convert HEIC if needed
+    if (isHeic(file)) {
+      try {
+        file = await convertHeic(file);
+      } catch (e) {
+        failed++;
+        continue;
+      }
+    }
+
+    try {
+      const entry = await stripAndRender(file);
+      processedFiles.push(entry);
+      lastEntry = entry;
+      lastFile = file;
+      processed++;
+    } catch (e) {
+      failed++;
+    }
+  }
+
+  // Nothing succeeded
+  if (processed === 0) {
+    statusText.textContent = 'Could not process any of these images — try converting to JPEG first';
+    statusBar.classList.add('visible');
+    statusBar.style.color = 'var(--accent)';
+    document.getElementById('statusIcon').textContent = '✕';
+    dropzone.classList.remove('processing');
+    return;
+  }
+
+  // Show preview + details of the last successfully processed file
+  setPreview(lastFile);
+  originalSize     = lastEntry.originalSize;
+  currentFileName  = lastFile.name;
+  cleanBlob        = lastEntry.blob;
+  cleanFileExt     = lastEntry.outputExt;
+
+  const lastWasClean = lastEntry.removed.length === 0;
+  const sizeComp = document.getElementById('sizeComparison');
+  document.getElementById('sizeBefore').textContent = formatSize(lastEntry.originalSize);
+  document.getElementById('sizeAfter').textContent  = formatSize(lastEntry.cleanSize);
+  const saved = lastEntry.originalSize - lastEntry.cleanSize;
+  document.getElementById('sizeSaving').textContent =
+    (saved > 0 && !lastWasClean) ? `-${formatSize(saved)} (${Math.round(saved / lastEntry.originalSize * 100)}%)` : '';
+  sizeComp.style.display = lastWasClean ? 'none' : 'flex';
+
+  // Show results
+  results.classList.add('visible');
+  statusBar.classList.add('visible');
+  statusBar.style.color = '';
+  document.getElementById('statusIcon').textContent = '✓';
+  statusText.textContent = failed > 0
+    ? `${processed} photos cleaned · ${failed} skipped`
+    : `All metadata removed from ${processed} photos`;
+  metadataAfter.style.display = lastWasClean ? 'none' : 'block';
+  downloadBtn.disabled = false;
+  copyBtn.disabled = false;
+  dropzone.classList.remove('processing');
+  dropzone.classList.add('done');
+
+  updateBatchUI();
 }
 
 downloadBtn.addEventListener('click', () => {
@@ -1316,12 +1623,85 @@ downloadBtn.addEventListener('click', () => {
   }, 2500);
 });
 
+// Copy the clean image to the clipboard (Issue #3).
+// The Clipboard API reliably supports PNG only, so non-PNG output is converted
+// to PNG via canvas for the clipboard copy. The downloaded file stays lossless.
+copyBtn.addEventListener('click', async () => {
+  if (!cleanBlob) return;
+
+  const restore = (msg, ok = true) => {
+    copyBtn.innerHTML = msg;
+    if (ok) copyBtn.classList.add('btn-downloaded');
+    setTimeout(() => {
+      copyBtn.innerHTML = '📋 Copy';
+      copyBtn.classList.remove('btn-downloaded');
+    }, 2500);
+  };
+
+  // Feature detection
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    restore('✕ Not supported', false);
+    return;
+  }
+
+  copyBtn.disabled = true;
+  try {
+    let blobToCopy = cleanBlob;
+
+    // Convert to PNG if it isn't already (clipboard image support is PNG-centric)
+    if (cleanBlob.type !== 'image/png') {
+      blobToCopy = await blobToPng(cleanBlob);
+    }
+
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blobToCopy })
+    ]);
+    restore('✓ Copied');
+  } catch (e) {
+    restore('✕ Copy failed', false);
+  } finally {
+    copyBtn.disabled = false;
+  }
+});
+
+// Render any image blob to a PNG blob via an offscreen canvas
+function blobToPng(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(
+        (out) => out ? resolve(out) : reject(new Error('toBlob failed')),
+        'image/png'
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+}
+
 // Batch ZIP download
 document.getElementById('downloadAllBtn').addEventListener('click', async () => {
   if (processedFiles.length === 0) return;
   const btn = document.getElementById('downloadAllBtn');
   btn.textContent = 'Creating ZIP…';
   btn.disabled = true;
+
+  try {
+    await loadZipLibrary();
+  } catch (e) {
+    btn.innerHTML = '⚠ ZIP library failed to load';
+    setTimeout(() => {
+      btn.innerHTML = `📦 Download all as ZIP (${processedFiles.length} photos)`;
+      btn.disabled = false;
+    }, 2500);
+    return;
+  }
 
   const zip = new JSZip();
   for (const f of processedFiles) {
@@ -1338,7 +1718,7 @@ document.getElementById('downloadAllBtn').addEventListener('click', async () => 
   btn.textContent = '✓ Downloaded';
   btn.classList.add('btn-downloaded');
   setTimeout(() => {
-    btn.innerHTML = `📦 Download all as ZIP (<span id="batchCount2">${processedFiles.length}</span> photos)`;
+    btn.innerHTML = `📦 Download all as ZIP (${processedFiles.length} photos)`;
     btn.classList.remove('btn-downloaded');
     btn.disabled = false;
   }, 2500);
@@ -1350,49 +1730,80 @@ function reset() {
   metadataAfter.style.display = 'none';
   document.getElementById('sizeComparison').style.display = 'none';
   document.getElementById('batchActions').style.display = 'none';
+  document.getElementById('batchResults').style.display = 'none';
   dropzone.classList.remove('done', 'processing');
   downloadBtn.disabled = true;
   downloadBtn.innerHTML = '📥 Download clean photo';
+  copyBtn.disabled = true;
+  copyBtn.innerHTML = '📋 Copy';
+  copyBtn.classList.remove('btn-downloaded');
   downloadBtn.classList.remove('btn-downloaded');
   cleanBlob = null;
   currentFileName = '';
   cleanFileExt = 'jpg';
   originalSize = 0;
   processedFiles = [];
+  if (currentPreviewUrl) { URL.revokeObjectURL(currentPreviewUrl); currentPreviewUrl = null; }
+  previewImg.removeAttribute('src');
   document.getElementById('batchInfo').classList.remove('visible');
   fileInput.value = '';
 }
 
 // Drag & Drop
-dropzone.addEventListener('dragover', (e) => {
+// Drag feedback — use a counter so dragging over child elements doesn't flicker
+let dragDepth = 0;
+const dropzoneText = dropzone.querySelector('.dropzone-text');
+const dropzoneTextDefault = dropzoneText ? dropzoneText.textContent : '';
+
+dropzone.addEventListener('dragenter', (e) => {
   e.preventDefault();
+  dragDepth++;
   dropzone.classList.add('dragover');
+  if (dropzoneText) dropzoneText.textContent = 'Release to strip metadata';
 });
 
-dropzone.addEventListener('dragleave', () => {
-  dropzone.classList.remove('dragover');
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
 });
+
+dropzone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) {
+    dropzone.classList.remove('dragover');
+    if (dropzoneText) dropzoneText.textContent = dropzoneTextDefault;
+  }
+});
+
+// Single entry point for any source of files (drop / picker / paste)
+function handleFiles(files) {
+  if (files.length === 1) {
+    dropzone.classList.add('processing');
+    processFile(files[0]);
+  } else if (files.length > 1) {
+    processBatch(files);
+  }
+}
 
 dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
+  dragDepth = 0;
   dropzone.classList.remove('dragover');
+  if (dropzoneText) dropzoneText.textContent = dropzoneTextDefault;
   const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/') || /\.hei[cf]$/i.test(f.name));
-  if (files.length === 1) {
-    dropzone.classList.add('processing');
-    processFile(files[0]);
-  } else if (files.length > 1) {
-    processBatch(files);
+  if (files.length === 0) {
+    // Dropped something that isn't an image
+    statusBar.classList.add('visible');
+    statusBar.style.color = 'var(--accent)';
+    document.getElementById('statusIcon').textContent = '✕';
+    statusText.textContent = 'That doesn\u2019t look like an image — try a JPG, PNG, WebP, or HEIC';
+    return;
   }
+  handleFiles(files);
 });
 
 fileInput.addEventListener('change', (e) => {
-  const files = Array.from(e.target.files);
-  if (files.length === 1) {
-    dropzone.classList.add('processing');
-    processFile(files[0]);
-  } else if (files.length > 1) {
-    processBatch(files);
-  }
+  handleFiles(Array.from(e.target.files));
 });
 
 // Keyboard support for dropzone
@@ -1402,8 +1813,34 @@ dropzone.addEventListener('keydown', (e) => {
     fileInput.click();
   }
 });
+
+// Paste support (Ctrl/Cmd+V) — Issue #2: let users paste screenshots straight
+// from the clipboard without saving to disk first.
+document.addEventListener('paste', (e) => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+
+  const files = [];
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const blob = item.getAsFile();
+      if (blob) {
+        // Clipboard images often have no name — synthesise one with the right extension
+        const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const named = blob.name
+          ? blob
+          : new File([blob], `pasted_${Date.now()}.${ext}`, { type: blob.type });
+        files.push(named);
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    e.preventDefault();
+    handleFiles(files);
+  }
+});
 </script>
 
-<script src="/vendor/jszip.min.js"></script>
 </body>
 </html>
