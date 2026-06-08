@@ -1374,11 +1374,11 @@ async function stripAndRender(file) {
     metaCount.textContent = 'clean';
     metaCount.className = 'metadata-count clean';
   } else if (totalFields > 0) {
-    metaCount.textContent = `${totalFields} fields`;
+    metaCount.textContent = `${totalFields} ${totalFields === 1 ? 'field' : 'fields'}`;
     metaCount.className = 'metadata-count';
   } else {
     // Removed only technical blocks (no readable fields)
-    metaCount.textContent = `${removed.length} blocks`;
+    metaCount.textContent = `${removed.length} ${removed.length === 1 ? 'block' : 'blocks'}`;
     metaCount.className = 'metadata-count';
   }
 
