@@ -355,7 +355,13 @@ body::before {
   letter-spacing: 1px;
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
+.meta-category svg { width: 13px; height: 13px; stroke-width: 1.8; flex-shrink: 0; }
+.meta-category.danger { color: var(--accent); }
+.meta-category.danger svg { color: var(--accent); }
 
 /* Actions */
 .actions {
@@ -767,6 +773,13 @@ const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICON_ZIP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>';
 const ICON_WARNING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2 20h20z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
+// Category icons
+const ICON_LOCATION = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const ICON_DEVICE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>';
+const ICON_DATE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>';
+const ICON_OTHER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+const ICON_BLOCKS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
+const ICON_REMOVED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
 // EXIF Parser — lightweight, client-side only
 const EXIF_TAGS = {
   0x010F: 'Camera Make', 0x0110: 'Camera Model', 0x0131: 'Software',
@@ -1303,18 +1316,18 @@ async function stripAndRender(file) {
   let totalFields = 0;
 
   const categories = [
-    { name: '📍 Location (GPS)', items: metadata.gps, danger: true },
-    { name: '📱 Device', items: metadata.camera, danger: false },
-    { name: '📅 Date & Time', items: metadata.datetime, danger: false },
-    { name: '📋 Other', items: metadata.other, danger: false },
+    { icon: ICON_LOCATION, name: 'Location (GPS)', items: metadata.gps, danger: true },
+    { icon: ICON_DEVICE, name: 'Device', items: metadata.camera, danger: false },
+    { icon: ICON_DATE, name: 'Date & Time', items: metadata.datetime, danger: false },
+    { icon: ICON_OTHER, name: 'Other', items: metadata.other, danger: false },
   ];
 
   categories.forEach(cat => {
     if (cat.items.length === 0) return;
 
     const catEl = document.createElement('li');
-    catEl.className = 'meta-category';
-    catEl.textContent = cat.name;
+    catEl.className = 'meta-category' + (cat.danger ? ' danger' : '');
+    catEl.innerHTML = cat.icon + '<span>' + cat.name + '</span>';
     metadataList.appendChild(catEl);
 
     cat.items.forEach(item => {
@@ -1336,7 +1349,7 @@ async function stripAndRender(file) {
   if (markers.types.length > 0) {
     const catEl = document.createElement('li');
     catEl.className = 'meta-category';
-    catEl.textContent = '🗂️ Blocks found';
+    catEl.innerHTML = ICON_BLOCKS + '<span>Blocks found</span>';
     metadataList.appendChild(catEl);
 
     markers.types.forEach(t => {
@@ -1363,7 +1376,7 @@ async function stripAndRender(file) {
   if (removed.length > 0) {
     const catEl = document.createElement('li');
     catEl.className = 'meta-category';
-    catEl.textContent = '🧹 Removed from file';
+    catEl.innerHTML = ICON_REMOVED + '<span>Removed from file</span>';
     metadataList.appendChild(catEl);
 
     removed.forEach(label => {
