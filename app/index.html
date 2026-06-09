@@ -13,7 +13,7 @@
   --surface-2: #1e1e1e;
   --border: #2a2a2a;
   --text: #e8e8e8;
-  --text-dim: #888;
+  --text-dim: #999;
   --accent: #ff3b3b;
   --accent-glow: rgba(255, 59, 59, 0.15);
   --green: #22c55e;
@@ -275,6 +275,7 @@ body::before {
 
 .metadata-title .warning { color: var(--accent); }
 .metadata-title .safe { color: var(--green); }
+.metadata-title svg { width: 16px; height: 16px; stroke-width: 1.8; vertical-align: -2px; }
 
 .metadata-count {
   font-family: var(--mono);
@@ -380,6 +381,7 @@ body::before {
   justify-content: center;
   gap: 8px;
 }
+.btn svg { width: 17px; height: 17px; stroke-width: 1.8; flex-shrink: 0; }
 
 /* Copy is a compact secondary action — don't let it grow as wide as Download */
 #copyBtn {
@@ -635,6 +637,7 @@ body::before {
     --border: #ddd;
     --text: #1a1a1a;
     --text-dim: #666;
+    --accent: #e11d1d;
   }
 }
 </style>
@@ -708,7 +711,7 @@ body::before {
     <div class="metadata-panel" id="metadataBefore" aria-label="Metadata found">
       <div class="metadata-header">
         <div class="metadata-title">
-          <span class="warning" aria-hidden="true">⚠</span> Metadata found
+          <span class="warning" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2 20h20z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17"/></svg></span> Metadata found
         </div>
         <span class="metadata-count" id="metaCount">0 fields</span>
       </div>
@@ -718,7 +721,7 @@ body::before {
     <div class="metadata-panel" id="metadataAfter" style="display:none" aria-label="Stripping result">
       <div class="metadata-header">
         <div class="metadata-title">
-          <span class="safe" aria-hidden="true">✓</span> After stripping
+          <span class="safe" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg></span> After stripping
         </div>
         <span class="metadata-count clean">clean</span>
       </div>
@@ -727,13 +730,13 @@ body::before {
 
     <div class="actions">
       <button class="btn btn-primary" id="downloadBtn" disabled aria-label="Download clean photo">
-        📥 Download clean photo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download clean photo
       </button>
       <button class="btn btn-secondary" id="copyBtn" disabled aria-label="Copy clean photo to clipboard">
-        📋 Copy
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy
       </button>
       <button class="btn btn-secondary" onclick="reset()" aria-label="Choose new photo">
-        ✕ New photo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg> New photo
       </button>
     </div>
     <div class="batch-results" id="batchResults" style="display:none" aria-label="Per-file results">
@@ -742,7 +745,7 @@ body::before {
     </div>
     <div class="batch-actions" id="batchActions" style="display:none">
       <button class="btn btn-secondary" id="downloadAllBtn" aria-label="Download all as ZIP">
-        📦 Download all as ZIP (<span id="batchCount2">0</span> photos)
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Download all as ZIP (<span id="batchCount2">0</span> photos)
       </button>
       </div>
   </div>
@@ -758,6 +761,12 @@ body::before {
 </div>
 
 <script>
+// Inline SVG icons (monochrome, inherit currentColor) — keep in sync with static HTML buttons
+const ICON_DOWNLOAD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const ICON_ZIP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>';
+const ICON_WARNING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L2 20h20z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17"/></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
 // EXIF Parser — lightweight, client-side only
 const EXIF_TAGS = {
   0x010F: 'Camera Make', 0x0110: 'Camera Model', 0x0131: 'Software',
@@ -1484,7 +1493,7 @@ function updateBatchUI() {
     const totalSaved    = totalOriginal - totalClean;
     const savedText     = totalSaved > 0 ? ` · saved ${formatSize(totalSaved)}` : '';
     document.getElementById('downloadAllBtn').innerHTML =
-      `📦 Download all as ZIP (${n} photos${savedText})`;
+      ICON_ZIP + ` Download all as ZIP (${n} photos${savedText})`;
 
     // Per-file before/after list
     const list = document.getElementById('batchResultsList');
@@ -1621,7 +1630,7 @@ downloadBtn.addEventListener('click', () => {
 
   // Downloaded feedback
   const orig = downloadBtn.innerHTML;
-  downloadBtn.innerHTML = '✓ Downloaded';
+  downloadBtn.innerHTML = ICON_CHECK + ' Downloaded';
   downloadBtn.classList.add('btn-downloaded');
   setTimeout(() => {
     downloadBtn.innerHTML = orig;
@@ -1639,7 +1648,7 @@ copyBtn.addEventListener('click', async () => {
     copyBtn.innerHTML = msg;
     if (ok) copyBtn.classList.add('btn-downloaded');
     setTimeout(() => {
-      copyBtn.innerHTML = '📋 Copy';
+      copyBtn.innerHTML = ICON_COPY + ' Copy';
       copyBtn.classList.remove('btn-downloaded');
     }, 2500);
   };
@@ -1662,7 +1671,7 @@ copyBtn.addEventListener('click', async () => {
     await navigator.clipboard.write([
       new ClipboardItem({ 'image/png': blobToCopy })
     ]);
-    restore('✓ Copied');
+    restore(ICON_CHECK + ' Copied');
   } catch (e) {
     restore('✕ Copy failed', false);
   } finally {
@@ -1701,9 +1710,9 @@ document.getElementById('downloadAllBtn').addEventListener('click', async () => 
   try {
     await loadZipLibrary();
   } catch (e) {
-    btn.innerHTML = '⚠ ZIP library failed to load';
+    btn.innerHTML = ICON_WARNING + ' ZIP library failed to load';
     setTimeout(() => {
-      btn.innerHTML = `📦 Download all as ZIP (${processedFiles.length} photos)`;
+      btn.innerHTML = ICON_ZIP + ` Download all as ZIP (${processedFiles.length} photos)`;
       btn.disabled = false;
     }, 2500);
     return;
@@ -1721,10 +1730,10 @@ document.getElementById('downloadAllBtn').addEventListener('click', async () => 
   a.click();
   URL.revokeObjectURL(a.href);
 
-  btn.textContent = '✓ Downloaded';
+  btn.innerHTML = ICON_CHECK + ' Downloaded';
   btn.classList.add('btn-downloaded');
   setTimeout(() => {
-    btn.innerHTML = `📦 Download all as ZIP (${processedFiles.length} photos)`;
+    btn.innerHTML = ICON_ZIP + ` Download all as ZIP (${processedFiles.length} photos)`;
     btn.classList.remove('btn-downloaded');
     btn.disabled = false;
   }, 2500);
@@ -1739,9 +1748,9 @@ function reset() {
   document.getElementById('batchResults').style.display = 'none';
   dropzone.classList.remove('done', 'processing');
   downloadBtn.disabled = true;
-  downloadBtn.innerHTML = '📥 Download clean photo';
+  downloadBtn.innerHTML = ICON_DOWNLOAD + ' Download clean photo';
   copyBtn.disabled = true;
-  copyBtn.innerHTML = '📋 Copy';
+  copyBtn.innerHTML = ICON_COPY + ' Copy';
   copyBtn.classList.remove('btn-downloaded');
   downloadBtn.classList.remove('btn-downloaded');
   cleanBlob = null;
